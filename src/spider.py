@@ -1,3 +1,4 @@
+from typing import final
 import requests
 import random
 import calendar
@@ -227,8 +228,11 @@ class Spider():
                 
                 tmp_title = tmp_title[0].text
                 tmp_lst = [tmp_title]
-                industry = self.get_info(self.xpath["industry"], detailed_page)[0].text
-                tmp_lst.append(industry)
+                industry = self.get_info(self.xpath["industry"], detailed_page)
+                if (industry == []):
+                    tmp_lst.append("null")
+                else:
+                    tmp_lst.append(industry[0].text)
                 tmp_lst.append(self.get_info(self.xpath["status"], detailed_page)[0].text) # status
 
                 crowd_time = self.get_info(self.xpath['time'], detailed_page).split(" - ")
@@ -238,7 +242,8 @@ class Spider():
 
                 pledge_goal = self.get_info(self.xpath['pledged_goal'], detailed_page)
                 pledge_goal = list(map(lambda x: x.text, pledge_goal))
-                pledge_goal[0] = pledge_goal[0][1:]
+                if (len(pledge_goal) == 1):
+                    pledge_goal.append("null")
                 tmp_lst.extend(pledge_goal)
                 
                 detailed_info = self.get_detailed_info(detailed_page)
@@ -259,6 +264,8 @@ class Spider():
                     graph_df = self.process_graph(elem_graph[0].text, graph_label_prog, total_prog, tmp_title)
                 if ("*" in tmp_title):
                     tmp_title = tmp_title.replace("*", "")
+                if ("/" in tmp_title):
+                    tmp_title = tmp_title.replace("/", "")
                 new_graph_path = graph_path + tmp_title + ".csv"
 
                 graph_df.to_csv(new_graph_path)
@@ -268,7 +275,12 @@ class Spider():
             print(tmp_title)
             traceback.print_exc()
         finally:
-            saved_df.to_csv(saved_path)
+            try:
+                saved_df.to_csv(saved_path)
+            except Exception as e:
+                traceback.print_exc()
+            finally:
+                saved_df.to_csv(saved_path + "_2.csv")
     
     def main(self):
         self.proxy_util()

@@ -1,0 +1,10 @@
+{
+    "title_save_path": "...\\xxx.csv",
+    "detailed_save_path":"...\\xxx.csv",
+    "graph_path": "...\\xxx\\",
+    "log_path": "...\\yyy.txt",
+    "use_proxy": true,
+    "t": 0,
+    "mode":"info",
+    "proxy": "username:pswd@ip:port"
+}
