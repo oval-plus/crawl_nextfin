@@ -5,6 +5,7 @@ import calendar
 from lxml import etree
 import time
 import re
+import os
 import traceback
 import pandas as pd
 requests.adapters.DEFAULT_RETRIES = 5
@@ -61,7 +62,7 @@ class Spider():
             self.get_random_headers()
             _r = requests.get(url_path, headers = self.headers)
  
-        time.sleep(5)
+        time.sleep(3)
         return _r
 
     def parse_html(self, raw_page):
@@ -101,10 +102,12 @@ class Spider():
         time_labels = label_prog.search(func_text).group(0).split(",")
         total_num = total_prog.search(func_text).group(0).split(",")
 
+        # change the month and day location
         time_series = list(map(lambda x: x[-3:-1] + "-" + x[1:3], time_labels))
         # time_series = list(map(lambda x: datetime.datetime.strptime(x[1:-1], "%d-%m").strftime("%m-%d"), time_labels))
+    
         df = pd.DataFrame(total_num, index = time_series, columns = [str(company_name)])
-        return df
+        return total_num, df
 
 
     def get_detailed_info(self, page):
@@ -127,6 +130,11 @@ class Spider():
             else:
                 target[i] = company_num[0].text
 
+        if "£" not in target[0]: # target
+            target.insert(0, "null")
+        if target[1] != "Convertible": # pre money
+            if "£" not in target[1]: 
+                target.insert(1, "null")
         if "%" not in target[2]: #equity
             target.insert(2, "null")
         if "£" in target[3]: # investors
@@ -143,7 +151,6 @@ class Spider():
             target.append("0")
                  
         target[0] = target[0][1:]
-        target[1] = target[1][1:]
         target.append(num_incorporated)
         return target
 
@@ -201,9 +208,13 @@ class Spider():
         
         df_lst = df.iloc[:, 0].tolist()[t:]
         n = len(df_lst)
-        saved_df = pd.DataFrame(columns = ['company_name', "industry", "status", "orig_start", "orig_end", "process_start", "process_end", \
+        col_name = ['company_name', "industry", "status", "orig_start", "orig_end", "process_start", "process_end", \
             "pledged", "goal", "target", "pre_money", "equity", "investor", "pledge_avg", "company_num", "company_status", "incorporated", \
-                "price", "incorporated_text", "url"])
+                "price", "incorporated_text", "url"]
+        row_num = 100
+        for j in range(0, row_num):
+            col_name.append(str(j + 1))
+        saved_df = pd.DataFrame(columns = col_name)
         graph_label_pattern = r'(?<=graph_labels=(\[))([^(\]);]+)'
         graph_label_prog = re.compile(graph_label_pattern)
         total_pattern = r'(?<=view_data=(\[))([^(\]);]+)'
@@ -255,32 +266,38 @@ class Spider():
                     saved_df.loc[i] = [tmp_title, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
                     print(tmp_title + " failed")
                     continue
-                saved_df.loc[i] = tmp_lst
                 
+                graph_info = []
                 elem_graph = self.get_info(self.xpath['graph_func'], detailed_page)
                 if elem_graph == []:
                     graph_df = pd.DataFrame(["not enough data"], columns = [tmp_title])
+                    graph_info = [0] * row_num
                 else:
-                    graph_df = self.process_graph(elem_graph[0].text, graph_label_prog, total_prog, tmp_title)
+                    # graph_df = self.process_graph(elem_graph[0].text, graph_label_prog, total_prog, tmp_title)
+                    graph_infos = self.process_graph(elem_graph[0].text, graph_label_prog, total_prog, tmp_title)
+                    graph_info = graph_infos[0]
+                    graph_df = graph_infos[1]
+
+                if (len(graph_info) < row_num):
+                    gap = row_num - len(graph_info)
+                    gap_list = ["null"] * gap
+                    graph_info.extend(gap_list)
+
+                tmp_lst.extend(graph_info)
                 if ("*" in tmp_title):
                     tmp_title = tmp_title.replace("*", "")
                 if ("/" in tmp_title):
                     tmp_title = tmp_title.replace("/", "")
-                new_graph_path = graph_path + tmp_title + ".csv"
-
+                new_graph_path = graph_path + tmp_title + "_" + str(i + self.config['t']) + ".csv"
                 graph_df.to_csv(new_graph_path)
+                saved_df.loc[i] = tmp_lst
                 print(tmp_title + " load complete", i + self.config['t'])
 
         except Exception as e:
             print(tmp_title)
             traceback.print_exc()
         finally:
-            try:
-                saved_df.to_csv(saved_path)
-            except Exception as e:
-                traceback.print_exc()
-            finally:
-                saved_df.to_csv(saved_path + "_2.csv")
+            saved_df.to_csv(saved_path)
     
     def main(self):
         self.proxy_util()
